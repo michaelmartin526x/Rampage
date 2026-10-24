@@ -8,7 +8,7 @@ export function makeWorld(set){
   for(const mesh of set){
     const points=new Float32Array(mesh.positions);
     const indices=Uint32Array.from({length:points.length/3},(_,i)=>i);
-    // Identical vertices and triangles to the rendered set; no proxy boxes.
+    // Dedicated artist-authored Collision_Mesh, kept out of the render scene.
     world.createCollider(RAPIER.ColliderDesc.trimesh(points,indices).setFriction(.5).setRestitution(.1));
   }
   return world;

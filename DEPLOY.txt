@@ -1,0 +1,26 @@
+Rampage — Prototype 003 — static web export
+
+Upload the contents of this ZIP to a static web hosting folder. index.html must
+sit beside main.js, physics.js, style.css, assets/ and vendor/. It also works
+inside a subfolder: all game URLs are relative.
+
+Serve using HTTP or HTTPS, not by double-clicking index.html. No build step,
+npm installation, backend, CDN, or external API is needed. The host must serve
+.js and .mjs files with a JavaScript MIME type (text/javascript or
+application/javascript). Enable gzip/Brotli for JavaScript and JSON if available.
+Rapier's WebAssembly is embedded in rapier.mjs; there is no separate .wasm file.
+
+Local test: extract this ZIP, run `python -m http.server 8765` inside the
+extracted folder, then open http://localhost:8765/.
+
+This is the playable five-vase destruction prototype, not the complete slot.
+It includes selection highlighting, grabbing, collisions, reset, the explicit
+Test Impact control, collider inspection and performance statistics. Keep
+Colliders off when comparing frame rates. Render size is 720 x 1280 portrait.
+
+Included libraries: Three.js 0.180.0 (MIT), Rapier 0.17.3 (Apache-2.0).
+Keep the license notices with redistributed copies.
+
+Excluded: Cannon, FBX/source artwork, Blender scenes, source exports, screenshots,
+inspection data, benchmarks, development scripts, and unused source-map links.
+Original editable assets remain in the development project.
