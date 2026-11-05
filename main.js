@@ -1,7 +1,21 @@
+import {createTidepool} from './tidepool.js';
 import * as THREE from './vendor/three.module.js';
+import {createPrizeRound} from './prizes.js';
+import {presentPrizeReveal} from './prize-reveal.js';
+import {engine,credits,startRoom,returnToSlot,enableControls,celebrate} from './slot-ui.js?room=2';
 import {RAPIER, STEP, initPhysics, makeWorld, createBody, pull} from './physics.js';
-const canvas=document.querySelector('canvas'), hint=document.querySelector('#hint');
+const canvas=document.querySelector('#game > canvas'), hint=document.querySelector('#hint');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true,stencil:true});
+const drawTidepool=createTidepool(renderer);
+const game=canvas.parentElement;
+const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+let lastBackdropFrame=-Infinity, backdropPhase=0;
+const roomContextRecovery=renderer.getContext().getExtension('WEBGL_lose_context');
+canvas.addEventListener('webglcontextlost',event=>{
+  event.preventDefault();
+  setTimeout(()=>roomContextRecovery?.restoreContext(),250);
+});
+canvas.addEventListener('webglcontextrestored',()=>{lastBackdropFrame=-Infinity;});
 renderer.setPixelRatio(1);
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
@@ -17,6 +31,40 @@ const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();
 let world,events,source,templates,vases=[],debris=[],drag=null,broken=0,accumulator=0,last=performance.now();
 let pending=new Set(),byCollider=new Map(),debugVisible=false,debugLines=null;
 const colors=[0x3a8b86,0xb95232,0xe6c697,0x8e9d62,0x547e99];
+let prizeRound,revealTimer;
+const prizeTray=document.querySelector('#prize-boxes'), results=document.querySelector('#results');
+function updatePrizes(){
+  prizeTray.replaceChildren(...prizeRound.collected.map(()=>{
+    const box=document.createElement('span');box.className='mystery-box';box.textContent='?';box.setAttribute('aria-label','Collected mystery prize');return box;
+  }));
+  document.querySelector('#prize-count').textContent=`${prizeRound.collected.length} collected`;
+}
+async function revealPrizes(){
+  if(!engine.finishRoom())return;
+  const complete=engine.state==='COMPLETE',button=document.querySelector('#play-again');
+  const tray=document.querySelector('#revealed-prizes'),values=document.querySelector('#prize-values'),total=document.querySelector('#prize-total');
+  const previousTotal=engine.feature.collected-prizeRound.total;
+  document.querySelector('#result-title').textContent='OPENING YOUR HAUL';
+  tray.replaceChildren(...prizeRound.collected.map(()=>{const tile=document.createElement('span');tile.className='revealed-prize sealed';tile.textContent='?';return tile;}));
+  values.textContent='Let’s see what you found…';total.textContent=`£${previousTotal/100}`;
+  button.disabled=true;button.textContent='REVEALING…';results.hidden=false;
+  await presentPrizeReveal(prizeRound.collected,previousTotal,step=>{
+    tray.querySelectorAll('.revealing').forEach(tile=>tile.classList.remove('revealing'));
+    if(step.prize){
+      const tile=tray.children[step.index];tile.className=`revealed-prize ${step.prize.type} revealing`;
+      tile.textContent=(step.prize.type==='cash'?'£':'×')+step.prize.value;
+    }
+    values.textContent=step.text;total.textContent=`£${step.total/100}`;
+    if(step.final){
+      document.querySelector('#result-title').textContent=complete?'RAMPAGE COMPLETE':'ROOM CLEARED';
+      total.animate([{transform:'scale(.85)',opacity:.3},{transform:'scale(1.12)',opacity:1},{transform:'scale(1)',opacity:1}],{duration:500});
+    }
+  });
+  // Only celebrate once the cash, additive multipliers and final equation have been shown.
+  if(complete)await celebrate(engine.feature.total);
+  button.textContent=complete?'BACK TO REELS':'NEXT ROOM';button.disabled=false;button.focus();
+}
+
 const materials=colors.map(color=>new THREE.MeshStandardMaterial({color,roughness:.32,metalness:.12}));
 // One extra draw for the held object; no full-screen outline pass.
 const selectionMaterial=new THREE.ShaderMaterial({
@@ -49,6 +97,7 @@ function clearSelection(){
 function geometry(data){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(data.positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(data.uv,2));g.computeVertexNormals();g.computeBoundingBox();return g;}
 function endGrab(){clearSelection();if(!drag)return;const id=drag.id;drag=null;if(canvas.hasPointerCapture(id))canvas.releasePointerCapture(id);}
 function reset(){
+  clearTimeout(revealTimer);results.hidden=true;prizeRound=createPrizeRound(source.vases.length,Math.random,engine.feature?.awards[engine.feature.room]??10000);updatePrizes();
   endGrab();for(const v of vases)scene.remove(v.mesh);for(const d of debris)scene.remove(d.mesh);
   world?.free();events?.free();world=makeWorld(source.collisions);events=new RAPIER.EventQueue(true);
   vases=[];debris=[];pending.clear();byCollider.clear();broken=0;accumulator=0;
@@ -81,11 +130,13 @@ function shatter(v){
   while(debris.length>source.vases.length*source.vaseTemplate.fragments.length)removeDebris(debris.shift());
   document.querySelector('#score').textContent=`${broken} / ${source.vases.length}`;
   hint.textContent=broken===source.vases.length?'Proper rampage. Reset and go again!':['That’s one way to dust.','Lovely. Absolutely wrecked.','Mind the… never mind.'][broken%3];
+  if(prizeRound.collect(v.index)){updatePrizes();hint.textContent='Mystery prize found! Smash the rest to reveal it.';}
+  if(broken===source.vases.length){hint.textContent='Set wrecked! Opening your mystery prizes…';revealTimer=setTimeout(revealPrizes,1100);}
 }
 function aim(e){const r=canvas.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);raycaster.setFromCamera(pointer,camera);}
 function targetFromPointer(e){aim(e);return raycaster.ray.intersectPlane(drag.plane,new THREE.Vector3());}
 canvas.addEventListener('pointerdown',e=>{
-  if(!world||drag||e.button>0)return;aim(e);
+  if(engine.state!=='ROOM'||!world||drag||e.button>0)return;aim(e);
   const hit=raycaster.intersectObjects(vases.filter(v=>!v.broken).map(v=>v.mesh),false)[0];if(!hit)return;
   const v=hit.object.userData.vase;v.armed=true;v.body.wakeUp();
   const localPoint=hit.point.clone().sub(new THREE.Vector3().copy(v.body.translation())).applyQuaternion(new THREE.Quaternion().copy(v.body.rotation()).invert());
@@ -104,8 +155,15 @@ function depth(delta){if(!drag)return;drag.desiredDepth=THREE.MathUtils.clamp(dr
 canvas.addEventListener('wheel',e=>{if(drag){e.preventDefault();depth(-e.deltaY*.0006);}},{passive:false});
 document.querySelector('#in').addEventListener('pointerdown',e=>{e.preventDefault();depth(-.08);});
 document.querySelector('#out').addEventListener('pointerdown',e=>{e.preventDefault();depth(.08);});
-document.querySelector('#reset').addEventListener('click',reset);
+document.querySelector('#reset').addEventListener('click',()=>{if(engine.state==='ROOM')reset();});
+document.addEventListener('rampage-room',()=>{
+  const gl=renderer.getContext();
+  if(gl.isContextLost())roomContextRecovery?.restoreContext();
+  reset();
+});
+document.querySelector('#play-again').addEventListener('click',()=>{results.hidden=true;if(engine.state==='COMPLETE')returnToSlot();else startRoom();});
 document.querySelector('#smash').addEventListener('click',()=>{
+  if(engine.state!=='ROOM')return;
   const v=vases.find(v=>!v.broken&&v!==drag?.v);if(!v)return;
   // Explicit test button: a measured sideways impulse, with no repositioning.
   v.armed=true;v.body.applyImpulse({x:v.body.translation().x>0?.9:-.9,y:.35,z:0},true);
@@ -140,18 +198,28 @@ function physicsStep(){
 }
 let sampleTime=performance.now(),sampleFrames=0,physicsMs=0;
 function animate(now){requestAnimationFrame(animate);const dt=Math.min((now-last)/1000,.05);last=now;
-  if(world){accumulator+=dt;while(accumulator>=STEP){const start=performance.now();physicsStep();physicsMs+=performance.now()-start;accumulator-=STEP;}
+  if(world&&engine.state==='ROOM'){accumulator+=dt;while(accumulator>=STEP){const start=performance.now();physicsStep();physicsMs+=performance.now()-start;accumulator-=STEP;}
     for(const v of vases)if(!v.broken){v.mesh.position.copy(v.body.translation());v.mesh.quaternion.copy(v.body.rotation());}
     if(drag&&!drag.forward&&drag.v.body.translation().z>-.36){drag.forward=true;hint.textContent='Selected — swing and release!';}
     for(let i=debris.length-1;i>=0;i--){const d=debris[i];if(d.body.translation().y < -3){removeDebris(d);debris.splice(i,1);}else{d.mesh.position.copy(d.body.translation());d.mesh.quaternion.copy(d.body.rotation());}}
-  }updateDebug();renderer.render(scene,camera);
+  }
+  if(game.classList.contains('bonus-active')){
+    if(canvas.height!==1280)renderer.setSize(720,1280,false);
+    lastBackdropFrame=-Infinity;
+    if(engine.state==='ROOM'){updateDebug();renderer.render(scene,camera);}
+  }else if(!document.hidden && (lastBackdropFrame===-Infinity || (!reducedMotion.matches && now-lastBackdropFrame>=1000/24))){
+    if(canvas.height!==640)renderer.setSize(360,640,false);
+    if(Number.isFinite(lastBackdropFrame))backdropPhase=(backdropPhase+Math.min(now-lastBackdropFrame,150)*.00016)%(2*Math.PI);
+    drawTidepool(360/640,backdropPhase);
+    lastBackdropFrame=now;
+  }
   sampleFrames++;if(now-sampleTime>=1000){
     const fps=sampleFrames*1000/(now-sampleTime);
     document.querySelector("#performance").textContent=`${Math.round(fps)} FPS · ${(physicsMs/sampleFrames).toFixed(1)} ms physics · ${debris.length} shards · ${renderer.info.render.calls} draws`;
     sampleTime=now;sampleFrames=0;physicsMs=0;
   }
 }
-renderer.setSize(720,1280,false);requestAnimationFrame(animate);
+requestAnimationFrame(animate);
 try{
   await initPhysics();const response=await fetch('./assets/scene.json');if(!response.ok)throw new Error('Scene download failed');source=await response.json();
   source.vases=source.placements.map(position=>({...source.vaseTemplate,position}));
@@ -167,5 +235,5 @@ try{
   const center=bounds.getCenter(new THREE.Vector3()),size=bounds.getSize(new THREE.Vector3());
   const distance=Math.max(size.y,size.x/camera.aspect)*1.005/(2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2)));
   camera.position.set(center.x,center.y,bounds.max.z+distance);camera.lookAt(center);
-  reset();document.querySelector('#loading').classList.add('hidden');document.querySelectorAll('button').forEach(b=>b.disabled=false);
+  reset();await enableControls();document.querySelector('#loading').classList.add('hidden');for(const id of ['reset','in','out','smash','colliders'])document.querySelector('#'+id).disabled=false;
 }catch(error){console.error(error);document.querySelector('#loading').textContent='Could not load the set. Reload to retry.';}

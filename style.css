@@ -1,3 +1,95 @@
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111214;color:#fff0ce;font-family:Arial,Helvetica,sans-serif}body{display:grid;place-items:center}#game{position:relative;width:min(100vw,56.25dvh);height:min(100dvh,177.7778vw);overflow:hidden;background:#251b10;box-shadow:0 0 100px #000}canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}canvas:active{cursor:grabbing}header{position:absolute;left:8%;right:8%;top:3%;pointer-events:none;text-align:center;text-shadow:0 3px 3px #000}h1{font-size:clamp(26px,6.5dvh,68px);font-style:italic;font-weight:950;letter-spacing:-3px;margin:5px 0;color:#ffc65b;line-height:.9;transform:rotate(-3deg)}h1 span{display:block;font-size:.19em;letter-spacing:.45em;font-style:normal;margin-top:12px;color:#fff0ce}.brand{font-size:clamp(8px,1.1dvh,13px);font-weight:bold;letter-spacing:3px}.brand small{font-size:.7em;color:#d1b98c;margin-left:10px;letter-spacing:1px}.hud{position:absolute;left:7%;right:7%;top:16.6%;height:8%;display:flex;align-items:center;justify-content:space-between;padding:0 6%;border:1px solid #d59c4a55;background:linear-gradient(110deg,#161511ed,#392a18d9);border-radius:5px;box-shadow:0 6px 20px #0008}.label{display:block;font-size:clamp(8px,1dvh,12px);letter-spacing:2px;color:#d5b77c}strong{font-size:clamp(22px,3.4dvh,40px);font-weight:900}button{border:1px solid #e8b65b88;background:#d99836;color:#17140c;padding:10px 13px;border-radius:4px;font-size:clamp(9px,1.2dvh,15px);font-weight:800;cursor:pointer}button:hover{background:#ffcb69}button:focus-visible{outline:3px solid white;outline-offset:3px}button:disabled{opacity:.4;cursor:wait}footer{position:absolute;bottom:2.2%;left:4%;right:4%;text-align:center;text-shadow:0 2px 3px #000}footer p{margin:0 0 5px;font-size:clamp(12px,1.7dvh,21px);font-weight:bold}footer span{display:block;color:#e6c691;letter-spacing:1.5px;font-size:clamp(7px,.9dvh,11px)}#smash{margin-top:10px;background:#201b13c9;color:#e9c88e;padding:6px 13px;font-size:10px}#loading{position:absolute;inset:0;display:grid;place-items:center;background:#17140eee;letter-spacing:3px;font-size:13px;z-index:5}#loading.hidden{display:none}
 /* Readout for on-device comparisons; keep colliders off for timing. */
 #performance{position:absolute;left:4%;right:4%;bottom:12%;text-align:center;font:10px monospace;color:#ffe6ad;background:#17130cbf;padding:5px;border-radius:3px;pointer-events:none}
+#prize-tray{position:absolute;top:25.5%;left:7%;right:7%;display:flex;justify-content:space-between;align-items:center;min-height:5%;padding:6px 5%;background:#20170de0;border:1px solid #d59c4a55;border-radius:5px;pointer-events:none}#prize-count{font-size:clamp(9px,1.2dvh,14px);color:#fff0ce}#prize-boxes{display:flex;gap:7px}.mystery-box{display:grid;place-items:center;width:clamp(24px,3.8dvh,45px);aspect-ratio:1;border:2px solid #ffda81;border-radius:5px;background:linear-gradient(135deg,#e7ab40,#8d4d15);color:#fff5c7;font-weight:900;font-size:clamp(18px,2.7dvh,30px);box-shadow:0 0 12px #efba4960;animation:prize-pop .3s ease-out}@keyframes prize-pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}#results{position:absolute;inset:0;z-index:4;display:grid;place-items:center;background:#100c08b8;padding:8%}#results[hidden]{display:none}.result-card{width:100%;text-align:center;padding:12% 6%;border:2px solid #e7b455;border-radius:12px;background:linear-gradient(145deg,#42301a,#17130e);box-shadow:0 10px 50px #000a}.result-card h2{font-style:italic;color:#ffce70;font-size:clamp(28px,5dvh,54px);margin:16px 0}.result-card p{font-size:clamp(12px,1.8dvh,20px);line-height:1.6}#prize-total{display:block;color:#ffd077;margin:10px 0}.result-card .demo-note{font-size:11px;color:#d4bc94}
+[hidden]{display:none!important}
+#game:not(.bonus-active)>.hud,#game:not(.bonus-active)>#prize-tray,#game:not(.bonus-active)>footer,#game:not(.bonus-active)>#performance{display:none}
+#game:not(.bonus-active){background:radial-gradient(ellipse at 50% 20%,#765227,#17110c 75%)}
+#game:not(.bonus-active)>canvas{pointer-events:none;image-rendering:pixelated}
+#room-label{position:absolute;top:-20px;left:0;font-size:11px;letter-spacing:2px;color:#ffda81}
+#slot-panel{position:absolute;inset:17% 6% 2%;text-align:center;display:flex;flex-direction:column;align-items:stretch;gap:1.3dvh}
+.slot-heading p{margin:6px 0;color:#e7cba1;font-size:clamp(12px,1.8dvh,20px)}
+#reel-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;padding:5px;border:3px solid #c5954f;border-radius:8px;background:#a77432;aspect-ratio:1.1;box-shadow:0 8px 22px #0008;flex-shrink:0}
+.reel-column{position:relative;overflow:hidden;background:#211910;container-type:size}
+.reel-track{width:100%}
+.reel-symbol{height:25cqh;display:grid;place-items:center;border-bottom:1px solid #ffffff13;background:radial-gradient(#51402b,#211910)}
+.reel-symbol img{width:88%;height:88%;object-fit:contain}
+.reel-symbol.line-win{background:radial-gradient(#c59134,#5e3e17);box-shadow:inset 0 0 0 2px #ffe3a1}
+
+.account{display:flex;justify-content:space-around;padding:10px 2px;background:#100d09b0;border:1px solid #be96524f;border-radius:5px}
+.account div{font-size:clamp(8px,1.1dvh,12px);letter-spacing:1px;color:#cbb68d}
+.account strong{display:block;font-size:clamp(16px,2.5dvh,28px);letter-spacing:0;color:#fff1c7;margin-top:4px}
+#spin{font-size:clamp(18px,2.8dvh,30px);padding:1.5dvh;background:linear-gradient(#ffcf6e,#b87924);box-shadow:0 4px 0 #684319}
+#preview-feature{align-self:center;background:transparent;color:#d5bc8f;font-size:10px;padding:7px 15px}
+#slot-panel details{font-size:11px;color:#ccb995;text-align:left;overflow:auto;min-height:18px}
+#slot-panel summary{cursor:pointer;text-align:center}.rules-copy{padding:10px;line-height:1.5;background:#17120d}
+#feature-entry{position:absolute;inset:0;z-index:4;display:grid;place-items:center;background:#100c08db;padding:8%}
+@media(max-height:650px){#slot-panel{gap:.7dvh}.account{padding:5px 2px}#preview-feature{padding:4px 10px}}
+/* GoldCherry controls and authored win presentation, adapted to portrait Rampage. */
+.slot-controls{display:flex;align-items:center;justify-content:center;gap:8%;height:10dvh;min-height:62px;flex-shrink:0}
+.slot-controls button,#spin{position:relative;background:none;border:0;box-shadow:none;padding:0;width:18%;height:75%;display:grid;place-items:center}
+.slot-controls #spin{width:30%;height:100%}
+.slot-controls img{max-width:100%;max-height:100%;object-fit:contain;pointer-events:none}
+.slot-controls button:hover{filter:brightness(1.2)}
+#autoplay[aria-pressed=true]{filter:brightness(1.3);outline:2px solid #ffce66;border-radius:50%}
+
+.key-hint{font-size:9px;letter-spacing:1px;color:#cdb88e}
+#settings-dialog{max-width:min(88vw,400px);background:#241b10;color:#ffe5b1;border:2px solid #dba54e;border-radius:10px;padding:25px}
+#settings-dialog::backdrop{background:#000b}
+#settings-dialog label{display:block;margin:20px 0}
+#settings-dialog p{font-size:12px;line-height:1.5}
+#settings-dialog select{padding:5px;margin-left:12px}
+#test-big-win{display:block;margin:8px auto;font-size:10px}
+.big-win-overlay{position:absolute;inset:0;z-index:25;border:0;padding:0;width:100%;height:100%;background:rgba(10,0,4,.72);cursor:pointer;touch-action:manipulation}
+.big-win-overlay:hover{background:rgba(10,0,4,.72)}
+.big-win-overlay canvas{display:block;width:100%;height:100%;cursor:pointer}
+
+#revealed-prizes{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin:15px 0}.revealed-prize{padding:10px 12px;border:2px solid #fbd47b;border-radius:7px;background:#81501b;color:#fff0c0;font-size:clamp(17px,2.5dvh,28px);font-weight:900}.revealed-prize.multiplier{background:#165a62;border-color:#8cfff0;color:#c5fff6}
+
+.revealed-prize.sealed{background:#30261a;color:#bd9c67;border-color:#6b5632}.revealed-prize.revealing{animation:prize-reveal .55s ease-out;box-shadow:0 0 20px #ffd36b88}.revealed-prize.multiplier.revealing{box-shadow:0 0 24px #70f9e999}@keyframes prize-reveal{0%{transform:scale(.6) rotateY(90deg);opacity:.2}65%{transform:scale(1.18) rotateY(0);opacity:1}100%{transform:scale(1)}}@media(prefers-reduced-motion:reduce){.revealed-prize.revealing{animation:none}}
+/* Prototype 015: authored 720 × 1280 comic layout. */
+#game:not(.bonus-active){background:#111c3b}
+#game:not(.bonus-active)>header{display:none}
+#slot-panel{inset:0;display:block;gap:0}
+.base-logo{position:absolute;left:.5%;top:4.6%;width:73.2%;z-index:2;pointer-events:none}
+.base-host{position:absolute;right:0;top:.5%;width:41.67%;pointer-events:none}
+.slot-heading{display:none}
+.reel-frame{position:absolute;left:0;top:21%;width:100%;height:62.03%;z-index:4;pointer-events:none}
+#slot-panel:before{content:'';position:absolute;left:0;top:23.4%;width:100%;height:57.3%;background:url('assets/base/Reel_Background.webp') center/100% 100% no-repeat;z-index:1}
+#reel-grid{position:absolute;left:0;top:27.8%;width:100%;height:49.5%;aspect-ratio:auto;padding:0;border:0;border-radius:0;gap:0;background:transparent;box-shadow:none;z-index:2}
+.reel-column,.reel-symbol{background:transparent;border:0}
+.reel-symbol img{width:100%;height:100%;object-fit:fill}
+.reel-symbol.line-win{background:#ffffff55;box-shadow:inset 0 0 0 3px #fff;filter:brightness(1.25)}
+
+.slot-controls{position:absolute;left:0;right:0;top:84.3%;height:9.8%;min-height:0;gap:4.5%;z-index:5;align-items:end}
+.slot-controls button{width:13.2%;height:75%}.slot-controls #spin{width:21.8%;height:100%}
+
+.account{position:absolute;left:0;right:0;bottom:0;height:5.5%;padding:0 2%;border:0;border-radius:0;background:#000;align-items:center;justify-content:space-between;z-index:5}
+.account div{display:flex;align-items:baseline;gap:5px;font-size:clamp(8px,1.2dvh,14px);color:#888;letter-spacing:0}
+.account div:nth-child(1){order:3}.account div:nth-child(2){order:1}.account div:nth-child(3){order:2}
+.account strong{font-size:clamp(14px,2.1dvh,26px);color:#fff;margin:0}
+.symbol-effects{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3}
+#settings-dialog{max-height:85dvh;overflow:auto;background:#001a4d;color:white;border-color:#ffeb00}
+#settings-dialog details{margin:15px 0;font-size:12px}.rules-copy{background:#001039}
+#settings-dialog .key-hint{display:block;margin:15px 0}
+
+/* Alpha-masked tear; the extra reel rows sit behind the irregular opening. */
+#reel-window{position:absolute;inset:0;z-index:2;mask-image:url('assets/base/Reel_Background.webp');mask-mode:alpha;mask-size:100% 57.3%;mask-position:0 23.4%;mask-repeat:no-repeat;-webkit-mask-image:url('assets/base/Reel_Background.webp');-webkit-mask-size:100% 57.3%;-webkit-mask-position:0 54.8%;-webkit-mask-repeat:no-repeat}
+/* Percent mask positions use the remaining space, hence 23.4 / (100 - 57.3). */
+#reel-window{mask-position:0 54.8%}
+.reel-column{overflow:visible}
+.slot-controls{top:83.7%;height:8.8%;align-items:center}
+.slot-controls button,.slot-controls #spin{min-height:0}
+.slot-controls img{width:100%;height:100%;min-height:0}
+
+/* Original authored button sizes, raised clear of the financial bar. */
+#slot-panel{--controls-top:81.36%}
+.slot-controls{top:var(--controls-top);height:12.35%;align-items:center}
+.slot-controls button{width:13.2%;height:60.13%}
+.slot-controls #spin{width:21.8%;height:100%}
+
+.symbol-effects.winline-effect{z-index:1}
+.reel-symbol.line-win{background:transparent;box-shadow:none;filter:none}
+
+
+.scatter-info{position:absolute;left:50%;bottom:calc(100% - var(--controls-top));width:84.8%;height:auto;transform:translateX(-50%);z-index:5;pointer-events:none}

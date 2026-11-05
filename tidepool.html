@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tidepool · Shader study</title>
+<style>
+  html,body { margin:0; height:100%; background:#111c3b; overflow:hidden }
+  canvas { display:block; width:100%; height:100%; image-rendering:pixelated }
+</style>
+<canvas aria-label="Slowly swirling marbled ribbons"></canvas>
+<script type="module">
+import * as THREE from './vendor/three.module.js';
+
+import {createTidepool} from './tidepool.js';
+
+const canvas = document.querySelector('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, depth:false, stencil:false, powerPreference:'low-power' });
+const drawTidepool = createTidepool(renderer);
+let phase = 0;
+const draw = () => drawTidepool(innerWidth / innerHeight,phase);
+function resize() {
+  const scale = Math.min(1, 640 / Math.max(innerWidth,innerHeight));
+  renderer.setSize(Math.max(1, Math.round(innerWidth*scale)), Math.max(1, Math.round(innerHeight*scale)), false);
+  draw();
+}
+addEventListener('resize',resize);
+resize();
+
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+let timer, previous;
+function tick() {
+  const now = performance.now();
+  phase = (phase + Math.min(now-previous,150)*.00016) % (2*Math.PI);
+  previous = now;
+  draw();
+}
+function sync() {
+  clearInterval(timer);
+  if (!reducedMotion.matches && !document.hidden) {
+    previous = performance.now();
+    timer = setInterval(tick,1000/24);
+  }
+}
+reducedMotion.addEventListener('change',sync);
+document.addEventListener('visibilitychange',sync);
+sync();
+</script>
+</html>
