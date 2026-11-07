@@ -1,8 +1,9 @@
+import {loadHitEffects} from './hit-effects.js?scale=2';
 import {createTidepool} from './tidepool.js';
 import * as THREE from './vendor/three.module.js';
 import {createPrizeRound} from './prizes.js';
 import {presentPrizeReveal} from './prize-reveal.js';
-import {engine,credits,startRoom,returnToSlot,enableControls,celebrate} from './slot-ui.js?room=2';
+import {engine,credits,startRoom,returnToSlot,enableControls,celebrate} from './slot-ui.js?three-picks=1';
 import {RAPIER, STEP, initPhysics, makeWorld, createBody, pull} from './physics.js';
 const canvas=document.querySelector('#game > canvas'), hint=document.querySelector('#hint');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true,stencil:true});
@@ -31,7 +32,8 @@ const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();
 let world,events,source,templates,vases=[],debris=[],drag=null,broken=0,accumulator=0,last=performance.now();
 let pending=new Set(),byCollider=new Map(),debugVisible=false,debugLines=null;
 const colors=[0x3a8b86,0xb95232,0xe6c697,0x8e9d62,0x547e99];
-let prizeRound,revealTimer;
+const ROOM_PICKS=3;
+let prizeRound,revealTimer,hitEffects;
 const prizeTray=document.querySelector('#prize-boxes'), results=document.querySelector('#results');
 function updatePrizes(){
   prizeTray.replaceChildren(...prizeRound.collected.map(()=>{
@@ -97,7 +99,7 @@ function clearSelection(){
 function geometry(data){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(data.positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(data.uv,2));g.computeVertexNormals();g.computeBoundingBox();return g;}
 function endGrab(){clearSelection();if(!drag)return;const id=drag.id;drag=null;if(canvas.hasPointerCapture(id))canvas.releasePointerCapture(id);}
 function reset(){
-  clearTimeout(revealTimer);results.hidden=true;prizeRound=createPrizeRound(source.vases.length,Math.random,engine.feature?.awards[engine.feature.room]??10000);updatePrizes();
+  clearTimeout(revealTimer);hitEffects?.clear();results.hidden=true;prizeRound=createPrizeRound(ROOM_PICKS,Math.random,engine.feature?.awards[engine.feature.room]??10000);updatePrizes();
   endGrab();for(const v of vases)scene.remove(v.mesh);for(const d of debris)scene.remove(d.mesh);
   world?.free();events?.free();world=makeWorld(source.collisions);events=new RAPIER.EventQueue(true);
   vases=[];debris=[];pending.clear();byCollider.clear();broken=0;accumulator=0;
@@ -108,13 +110,15 @@ function reset(){
     const v={mesh,body,collider,index:i,broken:false,armed:false,previousVelocity:new THREE.Vector3(),previousAngular:new THREE.Vector3()};
     mesh.userData.vase=v;byCollider.set(collider.handle,v);vases.push(v);
   });
-  document.querySelector('#score').textContent=`0 / ${source.vases.length}`;hint.textContent='Grab, swing and release. Scroll to move in or out.';
+  document.querySelector('#smash').disabled=false;
+  document.querySelector('#score').textContent=`0 / ${ROOM_PICKS}`;hint.textContent='Break three! Choose your vases, swing and release.';
 }
 function removeDebris(d){scene.remove(d.mesh);world.removeRigidBody(d.body);}
 function shatter(v){
-  if(v.broken)return;
+  if(v.broken||broken>=ROOM_PICKS)return;
   if(drag?.v===v)endGrab();
   v.broken=true;broken++;byCollider.delete(v.collider.handle);
+  if(v.impact)hitEffects?.play(v.impact.point,v.impact.normal);
   const position=new THREE.Vector3().copy(v.body.translation()),rotation=new THREE.Quaternion().copy(v.body.rotation());
   // Carry forward the incident rigid-body motion, without a random explosion.
   const velocity=v.previousVelocity.clone(),angular=v.previousAngular.clone();
@@ -128,15 +132,20 @@ function shatter(v){
   }
   // Remove old pieces, never freeze them in midair to save physics work.
   while(debris.length>source.vases.length*source.vaseTemplate.fragments.length)removeDebris(debris.shift());
-  document.querySelector('#score').textContent=`${broken} / ${source.vases.length}`;
-  hint.textContent=broken===source.vases.length?'Proper rampage. Reset and go again!':['That’s one way to dust.','Lovely. Absolutely wrecked.','Mind the… never mind.'][broken%3];
-  if(prizeRound.collect(v.index)){updatePrizes();hint.textContent='Mystery prize found! Smash the rest to reveal it.';}
-  if(broken===source.vases.length){hint.textContent='Set wrecked! Opening your mystery prizes…';revealTimer=setTimeout(revealPrizes,1100);}
+  document.querySelector('#score').textContent=`${broken} / ${ROOM_PICKS}`;
+  hint.textContent=`${ROOM_PICKS-broken} more to break!`;
+  // Three concealed pick slots share the room's existing payout budget.
+  if(prizeRound.collect(broken-1)){updatePrizes();hint.textContent=`Mystery prize found! ${ROOM_PICKS-broken} more to break.`;}
+  if(broken===ROOM_PICKS){
+    endGrab();hint.textContent='Three smashed! Opening your mystery prizes�';
+    document.querySelector('#smash').disabled=true;
+    revealTimer=setTimeout(revealPrizes,1100);
+  }
 }
 function aim(e){const r=canvas.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);raycaster.setFromCamera(pointer,camera);}
 function targetFromPointer(e){aim(e);return raycaster.ray.intersectPlane(drag.plane,new THREE.Vector3());}
 canvas.addEventListener('pointerdown',e=>{
-  if(engine.state!=='ROOM'||!world||drag||e.button>0)return;aim(e);
+  if(engine.state!=='ROOM'||broken>=ROOM_PICKS||!world||drag||e.button>0)return;aim(e);
   const hit=raycaster.intersectObjects(vases.filter(v=>!v.broken).map(v=>v.mesh),false)[0];if(!hit)return;
   const v=hit.object.userData.vase;v.armed=true;v.body.wakeUp();
   const localPoint=hit.point.clone().sub(new THREE.Vector3().copy(v.body.translation())).applyQuaternion(new THREE.Quaternion().copy(v.body.rotation()).invert());
@@ -163,7 +172,7 @@ document.addEventListener('rampage-room',()=>{
 });
 document.querySelector('#play-again').addEventListener('click',()=>{results.hidden=true;if(engine.state==='COMPLETE')returnToSlot();else startRoom();});
 document.querySelector('#smash').addEventListener('click',()=>{
-  if(engine.state!=='ROOM')return;
+  if(engine.state!=='ROOM'||broken>=ROOM_PICKS)return;
   const v=vases.find(v=>!v.broken&&v!==drag?.v);if(!v)return;
   // Explicit test button: a measured sideways impulse, with no repositioning.
   v.armed=true;v.body.applyImpulse({x:v.body.translation().x>0?.9:-.9,y:.35,z:0},true);
@@ -191,7 +200,28 @@ function physicsStep(){
   events.drainContactForceEvents(e=>{
     for(const handle of [e.collider1(),e.collider2()]){
       const v=byCollider.get(handle);
-      if(v&&!v.broken&&v.armed&&v.previousVelocity.length()>1&&e.totalForceMagnitude()>18)pending.add(v);
+      if(v&&!v.broken&&v.armed&&v.previousVelocity.length()>1&&e.totalForceMagnitude()>18&&!pending.has(v)){
+        const other=world.getCollider(handle===e.collider1()?e.collider2():e.collider1());
+        let impact=null;
+        world.contactPair(v.collider,other,manifold=>{
+          if(impact||!manifold.numSolverContacts())return;
+          const point=new THREE.Vector3().copy(manifold.solverContactPoint(0));
+          const normal=new THREE.Vector3().copy(manifold.normal());
+          if(normal.dot(new THREE.Vector3().copy(v.body.translation()).sub(point))<0)normal.negate();
+          impact={point,normal};
+        });
+        // CCD can report an impact after its solver contact has disappeared.
+        // Keep the break feedback by projecting onto the collider we struck.
+        if(!impact){
+          const center=new THREE.Vector3().copy(v.body.translation());
+          const projected=other?.projectPoint(center,false);
+          const point=projected?new THREE.Vector3().copy(projected.point):center.clone();
+          const normal=center.clone().sub(point);
+          if(normal.lengthSq()<1e-10)normal.copy(v.previousVelocity).negate();
+          normal.normalize();impact={point,normal};
+        }
+        v.impact=impact;pending.add(v);
+      }
     }
   });
   for(const v of pending)shatter(v);pending.clear();
@@ -206,7 +236,7 @@ function animate(now){requestAnimationFrame(animate);const dt=Math.min((now-last
   if(game.classList.contains('bonus-active')){
     if(canvas.height!==1280)renderer.setSize(720,1280,false);
     lastBackdropFrame=-Infinity;
-    if(engine.state==='ROOM'){updateDebug();renderer.render(scene,camera);}
+    if(engine.state==='ROOM'){hitEffects?.update(dt);updateDebug();renderer.render(scene,camera);}
   }else if(!document.hidden && (lastBackdropFrame===-Infinity || (!reducedMotion.matches && now-lastBackdropFrame>=1000/24))){
     if(canvas.height!==640)renderer.setSize(360,640,false);
     if(Number.isFinite(lastBackdropFrame))backdropPhase=(backdropPhase+Math.min(now-lastBackdropFrame,150)*.00016)%(2*Math.PI);
@@ -223,8 +253,15 @@ requestAnimationFrame(animate);
 try{
   await initPhysics();const response=await fetch('./assets/scene.json');if(!response.ok)throw new Error('Scene download failed');source=await response.json();
   source.vases=source.placements.map(position=>({...source.vaseTemplate,position}));
-  const texture=await new THREE.TextureLoader().loadAsync('./assets/set.jpg');texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+  const texture=await new THREE.TextureLoader().loadAsync('./assets/Scene01CompleteMap.webp');texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
   for(const s of source.set){const material=s.name==='Scene01'?new THREE.MeshBasicMaterial({map:texture,side:THREE.DoubleSide}):new THREE.MeshStandardMaterial({color:0x281c0d,roughness:.5});scene.add(new THREE.Mesh(geometry(s),material));}
+  const unitResponse=await fetch('./assets/unit.json');
+  if(!unitResponse.ok)throw new Error('Shelf unit download failed');
+  const unit=await unitResponse.json(),unitGeometry=geometry(unit);
+  for(const group of unit.groups)unitGeometry.addGroup(group.start,group.count,group.materialIndex);
+  const unitMaterials=[0x55738b,0x344a62,0x65869b,0x2b4056,0x425f79,0x8196a5].map(color=>new THREE.MeshStandardMaterial({color,roughness:.55,metalness:.12}));
+  scene.add(new THREE.Mesh(unitGeometry,unitMaterials));
+  source.collisions.push(unit);
   const v=source.vaseTemplate;
   const sharedTemplate={intact:geometry(v.intact),parts:v.fragments.map(f=>{
     const g=geometry(f),center=g.boundingBox.getCenter(new THREE.Vector3());g.translate(-center.x,-center.y,-center.z);return {geometry:g,center};
@@ -235,5 +272,6 @@ try{
   const center=bounds.getCenter(new THREE.Vector3()),size=bounds.getSize(new THREE.Vector3());
   const distance=Math.max(size.y,size.x/camera.aspect)*1.005/(2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2)));
   camera.position.set(center.x,center.y,bounds.max.z+distance);camera.lookAt(center);
+  hitEffects=await loadHitEffects(scene,camera);
   reset();await enableControls();document.querySelector('#loading').classList.add('hidden');for(const id of ['reset','in','out','smash','colliders'])document.querySelector('#'+id).disabled=false;
 }catch(error){console.error(error);document.querySelector('#loading').textContent='Could not load the set. Reload to retry.';}

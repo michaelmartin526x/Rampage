@@ -43,8 +43,10 @@ function paint(column,symbols,settled=false){
       Object.assign(img.style,{display:'block',width:'900%',maxWidth:'none',height:'100%'});
       viewport.append(img);
       cell.append(viewport);
-      img.animate([{transform:'translateX(0)'},{transform:'translateX(-100%)'}],
+      const idle=img.animate([{transform:'translateX(0)'},{transform:'translateX(-100%)'}],
         {duration:750,iterations:Infinity,easing:'steps(9,end)'});
+      // All Wilds share the document timeline, including newly landed/refilled ones.
+      idle.startTime=0;
     }else{
       if(symbolEffects)img.src=symbolEffects.images[symbol];
       cell.append(img);
@@ -121,7 +123,7 @@ async function play(isPreview,automatic=false){
 
   if(engine.state==='ENTRY'){
     stopAuto();
-    document.querySelector('#entry-copy').textContent=`${engine.feature.awards.length} rooms unlocked. Smash every vase and collect your mystery prizes.${isPreview?' Preview only — balance unchanged.':''}`;
+    document.querySelector('#entry-copy').textContent=`${engine.feature.awards.length} rooms unlocked. Choose three vases to break in each room and reveal your mystery prizes.${isPreview?' Preview only — balance unchanged.':''}`;
     entry.hidden=false;document.querySelector('#enter-feature').focus();
   }else await celebrate(record.totalUnits);
   busy=false;updateAccount();scheduleAuto();
