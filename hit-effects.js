@@ -9,15 +9,21 @@ export async function loadHitEffects(scene,camera){
   const data=new spine.SkeletonJson(new spine.AtlasAttachmentLoader(assets.require('HitFX.atlas'))).readSkeletonData(assets.require('Hit_FX.json'));
   const active=[];
   let audioContext,buffer;
-  const sound=fetch('assets/hit-fx/smash.mp3').then(r=>{if(!r.ok)throw new Error('Smash audio download failed');return r.arrayBuffer();});
-  async function unlock(){
-    audioContext??=new AudioContext();
-    await audioContext.resume();
-    buffer??=await audioContext.decodeAudioData((await sound).slice(0));
+  try{
+    const Context=window.AudioContext||window.webkitAudioContext;
+    audioContext=new Context();
+    const response=await fetch('assets/hit-fx/smash.mp3');
+    if(!response.ok)throw new Error('Smash audio download failed');
+    buffer=await audioContext.decodeAudioData(await response.arrayBuffer());
+  }catch(error){console.warn('Smash audio unavailable',error);}
+  function unlockAudio(){
+    if(!audioContext||audioContext.state==='running')return;
+    // Resume and start a silent buffer synchronously inside the tap gesture.
+    audioContext.resume().catch(console.warn);
+    const warmup=audioContext.createBufferSource();warmup.buffer=audioContext.createBuffer(1,1,22050);
+    warmup.connect(audioContext.destination);warmup.onended=()=>warmup.disconnect();warmup.start();
   }
-  const unlockAudio=()=>{unlock().catch(console.warn);};
-  document.addEventListener('pointerdown',unlockAudio,{capture:true});
-  document.addEventListener('keydown',unlockAudio,{capture:true});
+  for(const event of ['pointerdown','touchend','click','keydown'])document.addEventListener(event,unlockAudio,{capture:true,passive:true});
   function clear(){for(const hit of active){hit.root.removeFromParent();hit.mesh.dispose();}active.length=0;}
   return {clear,play(point,normal){
     const mesh=new spine.SkeletonMesh({skeletonData:data,twoColorTint:false,

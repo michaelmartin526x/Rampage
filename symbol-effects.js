@@ -11,9 +11,9 @@ export async function loadSymbolEffects(root,symbols){
     return [symbol,reader.readSkeletonData(assets.require(`${symbol}.json`))];
   })));
   const lineAssets=new spine.AssetManager('assets/winline/');
-  await lineAssets.loadTextureAtlasAsync('Winline.atlas');
-  await lineAssets.loadJsonAsync('Winlines.json');
-  const lineData=new spine.SkeletonJson(new spine.AtlasAttachmentLoader(lineAssets.require('Winline.atlas'))).readSkeletonData(lineAssets.require('Winlines.json'));
+  await lineAssets.loadTextureAtlasAsync('Winline.atlas?v=b22faeec-normal');
+  await lineAssets.loadJsonAsync('Winlines.json?v=normal-1');
+  const lineData=new spine.SkeletonJson(new spine.AtlasAttachmentLoader(lineAssets.require('Winline.atlas?v=b22faeec-normal'))).readSkeletonData(lineAssets.require('Winlines.json?v=normal-1'));
   const renderer=new THREE.WebGLRenderer({alpha:true,antialias:true,preserveDrawingBuffer:true});
   renderer.setPixelRatio(1);renderer.setClearColor(0,0);
   renderer.domElement.className='symbol-effects';

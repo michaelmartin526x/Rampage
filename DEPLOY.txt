@@ -1,0 +1,36 @@
+Rampage — Prototype 018 — static web export
+
+Upload the contents of this ZIP to a static web hosting folder. index.html must
+sit beside main.js, physics.js, style.css, assets/ and vendor/. It also works
+inside a subfolder: all game URLs are relative.
+
+Serve using HTTP or HTTPS, not by double-clicking index.html. No build step,
+npm installation, backend, CDN, or external API is needed. The host must serve
+.js and .mjs files with a JavaScript MIME type (text/javascript or
+application/javascript). Enable gzip/Brotli for JavaScript and JSON if available.
+Rapier's WebAssembly is embedded in rapier.mjs; there is no separate .wasm file.
+
+Local test: extract this ZIP, run `python -m http.server 8765` inside the
+extracted folder, then open http://localhost:8765/.
+
+This prototype connects the 4x4, six-line slot to a multi-room destruction bonus.
+Cascades remove winning symbols, drop survivors, refill using reel frequencies
+and re-evaluate until no line wins. Scatter triggers resolve after cascades.
+Reworked A/B/M/F reels use supplied weights 4299/5500/1/200; not RTP-tuned;
+see the project simulation report for measured results.
+Demo credits only. Bonus math is provisional: 50x/100x/200x with weights 560/340/100 (mean 82x),
+split across two rooms with whole-pound cash and additive multiplier tokens. Test Bonus never changes balance. Space spins when idle. Autoplay has no spin limit; it stops on bonus entry, loss of window focus or low credit.
+Original GoldCherry big-win animation and coin spill play at 2x or above
+(the same prototype threshold); Settings can disable the effects.
+The Set_04 platform rotates between rooms with a camera pullback. Break three vases per room.
+It includes selection highlighting, grabbing, collisions, reset, the explicit
+Mystery prize collection and end-of-round demo credit totals, Test Impact control, collider inspection and performance statistics. Keep
+Colliders off when comparing frame rates. Render size is 720 x 1280 portrait.
+
+Included libraries: Three.js 0.180.0 (MIT), Rapier 0.17.3 (Apache-2.0).
+Spine 4.3.13 is included under its accompanying Spine Runtimes license.
+Keep the license notices with redistributed copies.
+
+Excluded: Cannon, FBX/source artwork, Blender scenes, source exports, screenshots,
+inspection data, benchmarks, development scripts, and unused source-map links.
+Original editable assets remain in the development project.

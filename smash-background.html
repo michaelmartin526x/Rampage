@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rampage · Slow-motion smash background</title>
+<style>
+* {box-sizing:border-box} body {margin:0;background:#030b1c;color:#e4eeff;font:14px system-ui;display:grid;place-items:center;height:100dvh}
+canvas {display:block;width:min(100vw,56.25dvh);height:min(100dvh,177.7778vw)}
+aside {position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;padding:12px 16px;background:#07152ee8;border:1px solid #648bc766;border-radius:12px;width:max-content;max-width:95vw}
+button,select,a {font:inherit;color:#edf4ff;background:#17335b;border:1px solid #5377a9;border-radius:6px;padding:6px;text-decoration:none} label {white-space:nowrap}
+#status {position:fixed;top:16px;padding:8px 14px;border-radius:8px;background:#07152ecc;font-size:12px}
+</style>
+<canvas aria-label="3D vases flying into a wall and shattering in slow motion"></canvas>
+<div id="status" role="status">Loading breakable objects…</div>
+<aside><button id="pause">Pause</button><label>Speed <select id="speed"><option value=".1">0.1×</option><option value=".25" selected>0.25×</option><option value=".5">0.5×</option><option value="1">1×</option></select></label><label><input id="wall" type="checkbox"> Show collider</label><a href="./">View in game</a></aside>
+<script type="module">
+import * as THREE from './vendor/three.module.js';
+import {initPhysics} from './physics.js';
+import {createSmashBackground} from './smash-background.js';
+const status = document.querySelector('#status');
+try {
+  const renderer = new THREE.WebGLRenderer({canvas:document.querySelector('canvas'),antialias:true});
+  renderer.setSize(720,1280,false); renderer.toneMapping=THREE.ACESFilmicToneMapping;
+  await initPhysics();
+  const response=await fetch('./assets/scene.json'); if(!response.ok)throw new Error('Scene download failed');
+  const effect=await createSmashBackground(renderer,(await response.json()).vaseTemplate);
+  const motion=matchMedia('(prefers-reduced-motion: reduce)');
+  let paused=motion.matches, last=performance.now();
+  const pause=document.querySelector('#pause');
+  const sync=()=>pause.textContent=paused?'Play':'Pause'; sync();
+  pause.onclick=()=>{paused=!paused;sync();};
+  motion.addEventListener('change',()=>{paused=motion.matches;sync();});
+  document.querySelector('#speed').onchange=e=>effect.speed=Number(e.target.value);
+  document.querySelector('#wall').onchange=e=>effect.setColliderVisible(e.target.checked);
+  function frame(now) {
+    const dt=Math.min((now-last)/1000,.05);last=now;
+    if(!document.hidden)effect.draw(9/16,paused?0:dt);
+    status.textContent=`SLOW-MOTION SMASH · ${effect.stats.impacts} smashed · ${effect.stats.pairImpacts} vase collisions`;
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+} catch(error) {status.textContent='Could not load preview. Reload to retry.';console.error(error);}
+</script>
+</html>

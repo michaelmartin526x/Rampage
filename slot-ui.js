@@ -1,4 +1,4 @@
-import {loadSymbolEffects} from './symbol-effects.js';
+import {loadSymbolEffects} from './symbol-effects.js?winline=b22faeec-normal';
 import {SlotEngine,matrixFromStops} from './slot-engine.js?refill=1';
 import {MATH} from './math-data.js';
 import {reelProgress,wrap} from './reel-motion.js';
